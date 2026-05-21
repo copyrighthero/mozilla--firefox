@@ -238,10 +238,9 @@ pub enum ClientOperationEvent {
 mod tests {
     use crate::{
         ffi::telemetry::MozAdsTelemetryWrapper,
-        mars::Environment,
         test_utils::{
             get_example_happy_image_response, get_example_happy_spoc_response,
-            get_example_happy_uatile_response, make_happy_placement_requests,
+            get_example_happy_uatile_response, make_happy_placement_requests, test_environment,
         },
     };
 
@@ -267,7 +266,7 @@ mod tests {
         let config = AdsClientConfig {
             cache_config: None,
             context_id_provider: None,
-            environment: Environment::Test,
+            environment: test_environment(),
             telemetry: MozAdsTelemetryWrapper::noop(),
         };
         let client = AdsClient::new(config);
@@ -286,7 +285,7 @@ mod tests {
             .with_body(serde_json::to_string(&expected_response.data).unwrap())
             .create();
 
-        let mars_client = MARSClient::new(Environment::Test, None, MozAdsTelemetryWrapper::noop());
+        let mars_client = MARSClient::new(test_environment(), None, MozAdsTelemetryWrapper::noop());
         let ads_client = new_with_mars_client(mars_client);
 
         let result = ads_client.request_image_ads(make_happy_placement_requests(), None, false);
@@ -305,7 +304,7 @@ mod tests {
             .with_body(serde_json::to_string(&expected_response.data).unwrap())
             .create();
 
-        let mars_client = MARSClient::new(Environment::Test, None, MozAdsTelemetryWrapper::noop());
+        let mars_client = MARSClient::new(test_environment(), None, MozAdsTelemetryWrapper::noop());
         let ads_client = new_with_mars_client(mars_client);
 
         let result = ads_client.request_spoc_ads(make_happy_placement_requests(), None, false);
@@ -324,7 +323,7 @@ mod tests {
             .with_body(serde_json::to_string(&expected_response.data).unwrap())
             .create();
 
-        let mars_client = MARSClient::new(Environment::Test, None, MozAdsTelemetryWrapper::noop());
+        let mars_client = MARSClient::new(test_environment(), None, MozAdsTelemetryWrapper::noop());
         let ads_client = new_with_mars_client(mars_client);
 
         let result = ads_client.request_tile_ads(make_happy_placement_requests(), None, false);
@@ -356,7 +355,7 @@ mod tests {
         let config = AdsClientConfig {
             cache_config: None,
             context_id_provider: Some(Box::new(FixedContextId)),
-            environment: Environment::Test,
+            environment: test_environment(),
             telemetry: MozAdsTelemetryWrapper::noop(),
         };
         let client = AdsClient::new(config);
@@ -376,7 +375,7 @@ mod tests {
             .build()
             .unwrap();
         let mars_client = MARSClient::new(
-            Environment::Test,
+            test_environment(),
             Some(cache),
             MozAdsTelemetryWrapper::noop(),
         );

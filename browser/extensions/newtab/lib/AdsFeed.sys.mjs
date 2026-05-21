@@ -10,6 +10,16 @@ ChromeUtils.defineESModuleGetters(lazy, {
   ContextId: "moz-src:///browser/modules/ContextId.sys.mjs",
   ObliviousHTTP: "resource://gre/modules/ObliviousHTTP.sys.mjs",
   PersistentCache: "resource://newtab/lib/PersistentCache.sys.mjs",
+  MozAdsClientBuilder:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsCacheConfig:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsEnvironment:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsPlacementRequest:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsPlacementRequestWithCount:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
 });
 
 import {
@@ -47,6 +57,38 @@ const PREF_SYSTEM_SHOW_SPONSORED = "system.showSponsored";
 
 const CACHE_KEY = "ads_feed";
 const ADS_UPDATE_TIME = 30 * 60 * 1000; // 30 minutes
+
+// AC-64 benchmark toggle. When true, fetchData() routes through the Rust
+// Mozilla Ads Client (MAC) via UniFFI instead of the JS UAPI/OHTTP path.
+// Off by default; flipped by the benchmark harness only.
+const PREF_USE_ADS_CLIENT =
+  "browser.newtabpage.activity-stream.unifiedAds.useAdsClient";
+
+// No-op MozAdsTelemetry impl used during benchmarking. Production telemetry
+// wiring (Glean timing_distribution) is tracked as a separate follow-up.
+const BENCH_TELEMETRY = {
+  recordBuildCacheError() {},
+  recordClientError() {},
+  recordClientOperationTotal() {},
+  recordDeserializationError() {},
+  recordHttpCacheOutcome() {},
+};
+
+let _adsClient = null;
+function _ensureAdsClient() {
+  if (!_adsClient) {
+    _adsClient = lazy.MozAdsClientBuilder.init()
+      .cacheConfig(
+        new lazy.MozAdsCacheConfig({
+          dbPath: PathUtils.join(PathUtils.profileDir, "mac_cache.sqlite"),
+        })
+      )
+      .environment(new lazy.MozAdsEnvironment.Prod())
+      .telemetry(BENCH_TELEMETRY)
+      .build();
+  }
+  return _adsClient;
+}
 
 export class AdsFeed {
   constructor() {
@@ -353,48 +395,54 @@ export class AdsFeed {
     const controller = new AbortController();
     const { signal } = controller;
 
-    const options = {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        context_id: await lazy.ContextId.request(),
-        flags: adsBackendConfig,
-        placements,
-        blocks: blockedSponsors.split(","),
-      }),
-      credentials: "omit",
-      signal,
-    };
+    const useAdsClient = Services.prefs.getBoolPref(PREF_USE_ADS_CLIENT, false);
 
-    // Make Oblivious Fetch Request
-    if (marsOhttpEnabled && ohttpConfigURL && ohttpRelayURL) {
-      const config = await lazy.ObliviousHTTP.getOHTTPConfig(ohttpConfigURL);
-      if (!config) {
-        console.error(
-          new Error(
-            `OHTTP was configured for ${fetchUrl} but we couldn't fetch a valid config`
-          )
+    if (useAdsClient) {
+      responseData = await this.fetchWithAdsClient(placements);
+    } else {
+      const options = {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          context_id: await lazy.ContextId.request(),
+          flags: adsBackendConfig,
+          placements,
+          blocks: blockedSponsors.split(","),
+        }),
+        credentials: "omit",
+        signal,
+      };
+
+      // Make Oblivious Fetch Request
+      if (marsOhttpEnabled && ohttpConfigURL && ohttpRelayURL) {
+        const config = await lazy.ObliviousHTTP.getOHTTPConfig(ohttpConfigURL);
+        if (!config) {
+          console.error(
+            new Error(
+              `OHTTP was configured for ${fetchUrl} but we couldn't fetch a valid config`
+            )
+          );
+          return null;
+        }
+        fetchPromise = lazy.ObliviousHTTP.ohttpRequest(
+          ohttpRelayURL,
+          config,
+          fetchUrl,
+          options
         );
-        return null;
+      } else {
+        fetchPromise = this.fetch(fetchUrl, options);
       }
-      fetchPromise = lazy.ObliviousHTTP.ohttpRequest(
-        ohttpRelayURL,
-        config,
-        fetchUrl,
-        options
-      );
-    } else {
-      fetchPromise = this.fetch(fetchUrl, options);
-    }
 
-    const response = await fetchPromise;
+      const response = await fetchPromise;
 
-    if (response && response.status === 200) {
-      responseData = await response.json();
-    } else {
-      throw new Error(
-        `Error fetching data: ${response.status} - ${response.statusText}`
-      );
+      if (response && response.status === 200) {
+        responseData = await response.json();
+      } else {
+        throw new Error(
+          `Error fetching data: ${response.status} - ${response.statusText}`
+        );
+      }
     }
 
     if (supportedAdTypes.tiles) {
@@ -421,6 +469,48 @@ export class AdsFeed {
     }
 
     return returnData;
+  }
+
+  async fetchWithAdsClient(placements) {
+    const client = _ensureAdsClient();
+    const formattedResponse = {};
+
+    const tileRequests = placements
+      .filter(p => (p.placementId || p.placement)?.startsWith("newtab_tile_"))
+      .map(
+        p =>
+          new lazy.MozAdsPlacementRequest({
+            placementId: p.placementId || p.placement,
+            iabContent: p.iabContent ?? null,
+          })
+      );
+    if (tileRequests.length) {
+      const tiles = await client.requestTileAds(tileRequests, null);
+      for (const [placementId, tile] of Object.entries(tiles)) {
+        formattedResponse[placementId] = [tile];
+      }
+    }
+
+    const spocRequests = placements
+      .filter(p =>
+        (p.placementId || p.placement)?.startsWith("newtab_stories_")
+      )
+      .map(
+        p =>
+          new lazy.MozAdsPlacementRequestWithCount({
+            placementId: p.placementId || p.placement,
+            iabContent: p.iabContent ?? null,
+            count: p.count,
+          })
+      );
+    if (spocRequests.length) {
+      const spocs = await client.requestSpocAds(spocRequests, null);
+      for (const [placementId, spoc] of Object.entries(spocs)) {
+        formattedResponse[placementId] = spoc;
+      }
+    }
+
+    return formattedResponse;
   }
 
   /**

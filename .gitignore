@@ -419,3 +419,10 @@ CLAUDE.local.md
 # Ignore .json.gz (typically profiles) in the root directory
 # lint-ignore-next-line: git-only
 /*.json.gz
+
+# AC-64: locally-copied NSS distribution for ads-client (ohttp) build
+# Source: application-services repo libs/desktop/darwin-aarch64/nss
+libs/
+
+# direnv config — machine-local NSS_DIR/etc; not for sharing
+.envrc

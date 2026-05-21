@@ -1,0 +1,30 @@
+{
+  "newtab_tile_1": [
+    {
+      "block_key": "ac64-mars-tile-1",
+      "callbacks": {
+        "click": "http://127.0.0.1:0/click/mars-tile-1",
+        "impression": "http://127.0.0.1:0/impression/mars-tile-1",
+        "report": "http://127.0.0.1:0/report/mars-tile-1"
+      },
+      "format": "tile",
+      "image_url": "http://127.0.0.1:0/image/mars-tile-1.png",
+      "name": "AC-64 Bench Sponsor A",
+      "url": "http://127.0.0.1:0/landing/mars-tile-1"
+    }
+  ],
+  "newtab_tile_2": [
+    {
+      "block_key": "ac64-mars-tile-2",
+      "callbacks": {
+        "click": "http://127.0.0.1:0/click/mars-tile-2",
+        "impression": "http://127.0.0.1:0/impression/mars-tile-2",
+        "report": "http://127.0.0.1:0/report/mars-tile-2"
+      },
+      "format": "tile",
+      "image_url": "http://127.0.0.1:0/image/mars-tile-2.png",
+      "name": "AC-64 Bench Sponsor B",
+      "url": "http://127.0.0.1:0/landing/mars-tile-2"
+    }
+  ]
+}

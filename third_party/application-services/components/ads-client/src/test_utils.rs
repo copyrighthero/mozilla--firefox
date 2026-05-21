@@ -12,9 +12,14 @@ use crate::mars::{
     ad_response::{
         AdCallbacks, AdImage, AdResponse, AdSpoc, AdTile, SpocFrequencyCaps, SpocRanking,
     },
+    Environment,
 };
 
 pub const TEST_CONTEXT_ID: &str = "00000000-0000-4000-8000-000000000001";
+
+pub fn test_environment() -> Environment {
+    Environment::Test(Url::parse(&mockito::server_url()).unwrap())
+}
 
 pub fn make_happy_placement_requests() -> Vec<AdPlacementRequest> {
     vec![

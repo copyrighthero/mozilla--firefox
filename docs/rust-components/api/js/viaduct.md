@@ -34,7 +34,14 @@
     :members:
     :exclude-members: OhttpChannelNotConfigured
 ```
+<<<<<<< HEAD
 
+=======
+```{js:autoclass} RustViaduct.sys.OhttpConfig
+    :members:
+    :exclude-members: OhttpConfig
+```
+>>>>>>> ab68f49dbd0d (feat(ads-client): integrated the rust-based ads client with firefox prepped for performance testing.)
 ```{js:autoclass} RustViaduct.sys.OhttpConfigFetchFailed
     :members:
     :exclude-members: OhttpConfigFetchFailed
@@ -79,6 +86,19 @@
 ```
 
 ```{js:autofunction} RustViaduct.sys.initBackend
+```
+
+```{js:autofunction} RustViaduct.sys.clearOhttpChannels
+```
+```{js:autofunction} RustViaduct.sys.configureDefaultOhttpChannels
+```
+```{js:autofunction} RustViaduct.sys.configureOhttpChannel
+```
+```{js:autofunction} RustViaduct.sys.initBackend
+```
+```{js:autofunction} RustViaduct.sys.listOhttpChannels
+```
+```{js:autofunction} RustViaduct.sys.sendOhttpRequest
 ```
 
 ```{js:autofunction} RustViaduct.sys.setGlobalDefaultUserAgent

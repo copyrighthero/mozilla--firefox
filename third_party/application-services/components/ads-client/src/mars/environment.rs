@@ -11,17 +11,19 @@ static MARS_API_ENDPOINT_PROD: Lazy<Url> = Lazy::new(|| url!("https://ads.mozill
 
 static MARS_API_ENDPOINT_STAGING: Lazy<Url> = Lazy::new(|| url!("https://ads.allizom.org/v1/"));
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum Environment {
     #[default]
     Prod,
     Staging,
-    #[cfg(test)]
-    Test,
+    // AC-64: Test variant takes an explicit base URL so the JS bindings can
+    // point the client at a local fixture server for benchmarking. Was
+    // previously #[cfg(test)] with hard-coded mockito::server_url().
+    Test(Url),
 }
 
 impl Environment {
-    pub fn into_url(self, path: &str) -> Url {
+    pub fn into_url(&self, path: &str) -> Url {
         let mut base = self.base_url();
         // Ensure the path has a trailing slash so that `join` appends
         // rather than replacing the last segment.
@@ -32,12 +34,11 @@ impl Environment {
             .expect("joining a path to a valid base URL must succeed")
     }
 
-    fn base_url(self) -> Url {
+    fn base_url(&self) -> Url {
         match self {
             Environment::Prod => MARS_API_ENDPOINT_PROD.clone(),
             Environment::Staging => MARS_API_ENDPOINT_STAGING.clone(),
-            #[cfg(test)]
-            Environment::Test => Url::parse(&mockito::server_url()).unwrap(),
+            Environment::Test(url) => url.clone(),
         }
     }
 }

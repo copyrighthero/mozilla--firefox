@@ -126,7 +126,7 @@ impl MozAdsClientBuilder {
                 .clone()
                 .map(MozAdsContextIdProviderWrapper::new)
                 .map(Into::into),
-            environment: inner.environment.unwrap_or_default().into(),
+            environment: inner.environment.clone().unwrap_or_default().into(),
             telemetry: inner
                 .telemetry
                 .clone()
@@ -163,13 +163,15 @@ impl MozAdsClientBuilder {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, uniffi::Enum, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, uniffi::Enum, Eq, PartialEq)]
 pub enum MozAdsEnvironment {
     #[default]
     Prod,
     Staging,
-    #[cfg(test)]
-    Test,
+    // AC-64: Test variant exposed to JS bindings with explicit base URL,
+    // so AC-64 benchmark harness can point the client at a localhost
+    // fixture server. Previously #[cfg(test)]-gated.
+    Test { url: String },
 }
 
 #[derive(Clone, uniffi::Record)]
@@ -365,8 +367,9 @@ impl From<Environment> for MozAdsEnvironment {
         match env {
             Environment::Prod => MozAdsEnvironment::Prod,
             Environment::Staging => MozAdsEnvironment::Staging,
-            #[cfg(test)]
-            Environment::Test => MozAdsEnvironment::Test,
+            Environment::Test(url) => MozAdsEnvironment::Test {
+                url: url.to_string(),
+            },
         }
     }
 }
@@ -376,8 +379,9 @@ impl From<MozAdsEnvironment> for Environment {
         match env {
             MozAdsEnvironment::Prod => Environment::Prod,
             MozAdsEnvironment::Staging => Environment::Staging,
-            #[cfg(test)]
-            MozAdsEnvironment::Test => Environment::Test,
+            MozAdsEnvironment::Test { url } => Environment::Test(
+                Url::parse(&url).expect("MozAdsEnvironment::Test url must be valid"),
+            ),
         }
     }
 }

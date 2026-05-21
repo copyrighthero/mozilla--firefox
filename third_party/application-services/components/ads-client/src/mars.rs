@@ -146,16 +146,13 @@ mod tests {
     use super::*;
     use crate::ffi::telemetry::MozAdsTelemetryWrapper;
     use crate::test_utils::{
-        get_example_happy_image_response, make_happy_placement_requests, TEST_CONTEXT_ID,
+        get_example_happy_image_response, make_happy_placement_requests, test_environment,
+        TEST_CONTEXT_ID,
     };
     use mockito::mock;
 
     fn make_test_client(http_cache: Option<HttpCache>) -> MARSClient<MozAdsTelemetryWrapper> {
-        MARSClient::new(
-            Environment::Test,
-            http_cache,
-            MozAdsTelemetryWrapper::noop(),
-        )
+        MARSClient::new(test_environment(), http_cache, MozAdsTelemetryWrapper::noop())
     }
 
     #[test]
