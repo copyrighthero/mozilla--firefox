@@ -14,8 +14,11 @@ BROWSER_CHROME_MANIFESTS += [
 PYTHON_UNITTEST_MANIFESTS += ["test/pytest/python.toml"]
 
 XPCSHELL_TESTS_MANIFESTS += [
+    "test/perftest/xpcshell.toml",
     "test/xpcshell/xpcshell.toml",
 ]
+
+PERFTESTS_MANIFESTS += ["test/perftest/perftest.toml"]
 
 JAR_MANIFESTS += ["addon-jar.mn"]
 

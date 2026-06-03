@@ -1,0 +1,9 @@
+[DEFAULT]
+head = "head.js"
+support-files = [
+  "fixtures/uapi-shape.json",
+  "fixtures/mars-shape.json",
+  "fixtures/README.md",
+]
+
+["perftest_adsClient_dim3.js"]
