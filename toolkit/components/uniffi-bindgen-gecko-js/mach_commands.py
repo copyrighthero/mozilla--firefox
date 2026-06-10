@@ -61,6 +61,10 @@ def build_gkrust_uniffi_library(command_context, source_library):
                 + os.pathsep
                 + env.get("DYLD_LIBRARY_PATH", "")
             ).rstrip(os.pathsep)
+            env.setdefault(
+                "BUILDCONFIG_RS",
+                os.path.join(objdir, "build", "rust", "mozbuild", "buildconfig.rs"),
+            )
             # nss_sys's build script doesn't declare MOZ_TOPOBJDIR as a
             # rerun-if-env-changed input, so cached build artifacts may have
             # the wrong link commands. Force a clean rebuild of nss_sys.
