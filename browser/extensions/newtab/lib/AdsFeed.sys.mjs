@@ -20,6 +20,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
     "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
   MozAdsPlacementRequestWithCount:
     "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
+  MozAdsTelemetry:
+    "moz-src:///toolkit/components/uniffi-bindgen-gecko-js/components/generated/RustAdsClient.sys.mjs",
 });
 
 import {
@@ -66,13 +68,24 @@ const PREF_USE_ADS_CLIENT =
 
 // No-op MozAdsTelemetry impl used during benchmarking. Production telemetry
 // wiring (Glean timing_distribution) is tracked as a separate follow-up.
-const BENCH_TELEMETRY = {
-  recordBuildCacheError() {},
-  recordClientError() {},
-  recordClientOperationTotal() {},
-  recordDeserializationError() {},
-  recordHttpCacheOutcome() {},
-};
+// Must extend the generated MozAdsTelemetry callback-interface base class;
+// plain objects are rejected at UniFFI lower-time. Class is instantiated
+// lazily inside _ensureAdsClient because lazy.MozAdsTelemetry only resolves
+// after the generated module has loaded.
+let _benchTelemetry = null;
+function _ensureBenchTelemetry() {
+  if (!_benchTelemetry) {
+    class BenchTelemetry extends lazy.MozAdsTelemetry {
+      recordBuildCacheError(_label, _value) {}
+      recordClientError(_label, _value) {}
+      recordClientOperationTotal(_label) {}
+      recordDeserializationError(_label, _value) {}
+      recordHttpCacheOutcome(_label, _value) {}
+    }
+    _benchTelemetry = new BenchTelemetry();
+  }
+  return _benchTelemetry;
+}
 
 let _adsClient = null;
 function _ensureAdsClient() {
@@ -84,7 +97,7 @@ function _ensureAdsClient() {
         })
       )
       .environment(new lazy.MozAdsEnvironment.Prod())
-      .telemetry(BENCH_TELEMETRY)
+      .telemetry(_ensureBenchTelemetry())
       .build();
   }
   return _adsClient;
