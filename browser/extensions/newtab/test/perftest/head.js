@@ -134,7 +134,6 @@ function createMacClient(macBaseUrl, dbPath) {
   return MozAdsClientBuilder.init()
     .cacheConfig(new MozAdsCacheConfig({ dbPath }))
     .environment(new MozAdsEnvironment.Test({ url: macBaseUrl }))
-    .telemetry(new BenchNoopTelemetry())
     .build();
 }
 

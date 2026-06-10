@@ -36,11 +36,12 @@ add_setup(async function () {
   await initRustComponents(PathUtils.profileDir);
 });
 
-// TODO(AC-64 follow-up): MAC requestTileAds crashes BgIOThreadPool with
-// MOZ_RELEASE_ASSERT(NS_IsMainThread()) — see ac64-handoff.md for the
-// integration finding. Skipped until the upstream thread-safety issue is
-// triaged; JS-path measurement is still useful as the baseline.
-add_task({ skip_if: () => true }, async function dim3_mac_coldCache() {
+// AC-64: skip .telemetry() in the builder chain so the Rust constructor
+// uses MozAdsTelemetryWrapper::noop() and never fires a Sync callback into
+// JS. This sidesteps the main-thread/Sync vtable dispatch crash without
+// touching vendored code; symbolicated stack confirmed the fire site was
+// AdsClient::new -> MozAdsTelemetryWrapper::record -> Sync callback shim.
+add_task(async function dim3_mac_coldCache() {
   info("dim3_mac probe: setting up fixture server");
   const fixture = await setupFixtureServer();
   info(`dim3_mac probe: fixture ready, macBaseUrl=${fixture.macBaseUrl}`);

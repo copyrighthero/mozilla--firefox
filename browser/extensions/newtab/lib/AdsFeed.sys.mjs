@@ -97,7 +97,6 @@ function _ensureAdsClient() {
         })
       )
       .environment(new lazy.MozAdsEnvironment.Prod())
-      .telemetry(_ensureBenchTelemetry())
       .build();
   }
   return _adsClient;
