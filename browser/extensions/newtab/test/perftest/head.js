@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/* globals do_get_file, info */
+
 "use strict";
 
 const { HttpServer } = ChromeUtils.importESModule(
@@ -34,12 +36,24 @@ const BENCH_CONTEXT_ID = "00000000-0000-4000-8000-ac64ac64ac64";
 
 // UniFFI rejects plain objects for callback interfaces; the telemetry sink
 // must be an instance of a subclass of the generated MozAdsTelemetry base.
+// AC-64 debug: surface deserialization failures via info() rather than silent
+// drop. AdResponse::parse on the Rust side swallows per-entry deser errors and
+// reports them only via this callback; without surfacing them here the bench
+// sees an empty {} response and no signal.
 class BenchNoopTelemetry extends MozAdsTelemetry {
-  recordBuildCacheError(_label, _value) {}
-  recordClientError(_label, _value) {}
+  recordBuildCacheError(label, value) {
+    info(`BUILD_CACHE_ERROR: ${label} = ${value}`);
+  }
+  recordClientError(label, value) {
+    info(`CLIENT_ERROR: ${label} = ${value}`);
+  }
   recordClientOperationTotal(_label) {}
-  recordDeserializationError(_label, _value) {}
-  recordHttpCacheOutcome(_label, _value) {}
+  recordDeserializationError(label, value) {
+    info(`DESER_FAIL: ${label} = ${value}`);
+  }
+  recordHttpCacheOutcome(label, value) {
+    info(`HTTP_CACHE: ${label} = ${value}`);
+  }
 }
 
 /**
@@ -62,9 +76,9 @@ function measureIterations(metricName) {
     },
     reportMetrics() {
       const metrics = {};
-      metrics[metricName + " iterations"] = iterations;
-      metrics[metricName + " accumulatedTime"] = accumulatedTime;
-      metrics[metricName + " perCallTime"] = accumulatedTime / iterations;
+      metrics[`${metricName} iterations`] = iterations;
+      metrics[`${metricName} accumulatedTime`] = accumulatedTime;
+      metrics[`${metricName} perCallTime`] = accumulatedTime / iterations;
       info("perfMetrics", metrics);
     },
   };
@@ -99,12 +113,31 @@ async function setupFixtureServer() {
     response.write(JSON.stringify(body));
   };
 
-  server.registerPathHandler("/v1/ads", (request, response) =>
-    writeJson(request, response, uapiBody)
-  );
-  server.registerPathHandler("/anyads/v1/ads", (request, response) =>
-    writeJson(request, response, marsBody)
-  );
+  server.registerPathHandler("/v1/ads", (request, response) => {
+    info(`UAPI_REQ: ${request.method} ${request.path}`);
+    writeJson(request, response, uapiBody);
+  });
+  server.registerPathHandler("/anyads/v1/ads", (request, response) => {
+    info(`MARS_REQ: ${request.method} ${request.path}`);
+    try {
+      const bodyStream = request.bodyInputStream;
+      if (bodyStream) {
+        const sis = Cc["@mozilla.org/scriptableinputstream;1"].createInstance(
+          Ci.nsIScriptableInputStream
+        );
+        sis.init(bodyStream);
+        const bodyText = sis.read(sis.available());
+        info(`MARS_REQ_BODY: ${bodyText}`);
+      }
+    } catch (e) {
+      info(`MARS_REQ_BODY_READ_ERR: ${e}`);
+    }
+    writeJson(request, response, marsBody);
+  });
+  server.registerPrefixHandler("/", (request, response) => {
+    info(`UNMATCHED_REQ: ${request.method} ${request.path}`);
+    response.setStatusLine(request.httpVersion, 404, "Not Found");
+  });
 
   server.start(-1);
 

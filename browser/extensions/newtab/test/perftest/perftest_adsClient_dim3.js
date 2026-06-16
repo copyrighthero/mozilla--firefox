@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/* globals add_setup, add_task, Assert, do_get_profile, info */
+
 "use strict";
 
 /**
@@ -63,12 +65,12 @@ add_task(async function dim3_mac_coldCache() {
       info(`dim3_mac probe: iter ${i} requestTileAds returned`);
 
       Assert.equal(
-        Object.keys(response).length,
+        response.size,
         TILE_PLACEMENTS.length,
         `MAC iteration ${i}: expected ${TILE_PLACEMENTS.length} placements`
       );
       Assert.ok(
-        response.newtab_tile_1.blockKey?.startsWith("ac64-mars-"),
+        response.get("newtab_tile_1")?.blockKey?.startsWith("ac64-mars-"),
         `MAC iteration ${i}: tile_1 should come from mars-shape fixture`
       );
 
