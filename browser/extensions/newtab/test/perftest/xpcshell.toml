@@ -7,3 +7,5 @@ support-files = [
 ]
 
 ["perftest_adsClient_dim3.js"]
+
+["perftest_adsClient_dim3_reverse.js"]

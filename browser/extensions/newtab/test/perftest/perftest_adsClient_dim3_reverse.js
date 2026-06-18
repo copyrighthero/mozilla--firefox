@@ -8,9 +8,9 @@
 
 const perfMetadata = {
   owner: "AC-64 / Hans Zhao",
-  name: "AdsClient.dim3.coldCache.forward",
+  name: "AdsClient.dim3.coldCache.reverse",
   description:
-    "AC-64 dim3 cold-cache benchmark (MAC vs JS) — forward order (MAC then JS).",
+    "AC-64 dim3 cold-cache benchmark (MAC vs JS) — reverse order (JS then MAC), counterbalanced with forward file.",
   options: {
     default: {
       perfherder: true,
@@ -29,22 +29,18 @@ const perfMetadata = {
 };
 
 /**
- * AC-64 Dim 3 cold-cache benchmark.
+ * AC-64 Dim 3 cold-cache benchmark — REVERSE order variant.
  *
- * One iteration = one client-side fetch of the two tile placements
- * (newtab_tile_1 + newtab_tile_2) against a localhost fixture server,
- * starting with no persistent cache present.
+ * Mirror of perftest_adsClient_dim3.js with the two add_task() blocks
+ * swapped (JS first, MAC second). Used together with the forward file
+ * to counterbalance xpcshell within-process warm-up bias: in the forward
+ * file the JS variant pays no JIT / IC / GC initialisation cost (MAC
+ * paid it); here the MAC variant rides on JS's warm-up. Pairing both
+ * outputs cancels the order effect to first order.
  *
- * For MAC: a fresh sqlite file is allocated per iteration. The cost
- * measured is the requestTileAds() call only; client construction is
- * excluded.
- *
- * For JS: a single POST + JSON.parse + tile normalization, matching
- * AdsFeed.sys.mjs's non-OHTTP branch. ContextId.request() is replaced
- * with a static UUID (see disclaimer artifact for IPC-asymmetry rationale).
- *
- * Both clients share the same HttpServer instance; routes are distinct,
- * so a misrouted iteration surfaces as a fixture-content assertion fail.
+ * Metric names are kept identical to the forward file so per-arm stats
+ * are computed across files; output directories are separated to keep
+ * forward / reverse perfherder JSON distinguishable.
  */
 
 const ITERATIONS = 20;
@@ -52,19 +48,45 @@ const TILE_PLACEMENTS = ["newtab_tile_1", "newtab_tile_2"];
 
 add_setup(async function () {
   do_get_profile();
-  // Bootstraps viaduct and the rest of the Rust runtime services. Without
-  // this, MozAdsClient operations crash with a main-thread assertion the
-  // first time the Rust side tries to make an HTTP call. See
-  // toolkit/components/passwordmgr/storage-rust.sys.mjs for the canonical
-  // call site in production code.
   await initRustComponents(PathUtils.profileDir);
 });
 
-// AC-64: skip .telemetry() in the builder chain so the Rust constructor
-// uses MozAdsTelemetryWrapper::noop() and never fires a Sync callback into
-// JS. This sidesteps the main-thread/Sync vtable dispatch crash without
-// touching vendored code; symbolicated stack confirmed the fire site was
-// AdsClient::new -> MozAdsTelemetryWrapper::record -> Sync callback shim.
+add_task(async function dim3_js_coldCache() {
+  const fixture = await setupFixtureServer();
+  const bench = measureIterations("AdsClient.JS.dim3.coldCache");
+
+  try {
+    const body = JSON.stringify(buildJsRequestBody(TILE_PLACEMENTS));
+    const headers = { "Content-Type": "application/json" };
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      bench.start();
+      const response = await fetch(fixture.jsEndpoint, {
+        method: "POST",
+        headers,
+        body,
+      });
+      const raw = await response.json();
+      const normalized = normalizeJsTileResponse(raw);
+      bench.stop();
+
+      Assert.equal(
+        normalized.tiles.length,
+        TILE_PLACEMENTS.length,
+        `JS iteration ${i}: expected ${TILE_PLACEMENTS.length} normalized tiles`
+      );
+      Assert.ok(
+        normalized.tiles[0].block_key.startsWith("ac64-uapi-"),
+        `JS iteration ${i}: tile_1 should come from uapi-shape fixture`
+      );
+    }
+  } finally {
+    await fixture.stop();
+  }
+
+  bench.reportMetrics();
+});
+
 add_task(async function dim3_mac_coldCache() {
   info("dim3_mac probe: setting up fixture server");
   const fixture = await setupFixtureServer();
@@ -100,42 +122,6 @@ add_task(async function dim3_mac_coldCache() {
       );
 
       await removeIfExists(dbPath);
-    }
-  } finally {
-    await fixture.stop();
-  }
-
-  bench.reportMetrics();
-});
-
-add_task(async function dim3_js_coldCache() {
-  const fixture = await setupFixtureServer();
-  const bench = measureIterations("AdsClient.JS.dim3.coldCache");
-
-  try {
-    const body = JSON.stringify(buildJsRequestBody(TILE_PLACEMENTS));
-    const headers = { "Content-Type": "application/json" };
-
-    for (let i = 0; i < ITERATIONS; i++) {
-      bench.start();
-      const response = await fetch(fixture.jsEndpoint, {
-        method: "POST",
-        headers,
-        body,
-      });
-      const raw = await response.json();
-      const normalized = normalizeJsTileResponse(raw);
-      bench.stop();
-
-      Assert.equal(
-        normalized.tiles.length,
-        TILE_PLACEMENTS.length,
-        `JS iteration ${i}: expected ${TILE_PLACEMENTS.length} normalized tiles`
-      );
-      Assert.ok(
-        normalized.tiles[0].block_key.startsWith("ac64-uapi-"),
-        `JS iteration ${i}: tile_1 should come from uapi-shape fixture`
-      );
     }
   } finally {
     await fixture.stop();

@@ -207,7 +207,7 @@ function buildJsRequestBody(placementIds) {
 function normalizeJsTileResponse(responseJson) {
   const formatted = [];
   for (const tileArray of Object.values(responseJson)) {
-    if (!tileArray?.length) {
+    if (!tileArray || !tileArray.length) {
       continue;
     }
     const [tile] = tileArray;
